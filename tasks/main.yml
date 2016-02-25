@@ -1,0 +1,123 @@
+---
+# tasks file for ansible-icinga2
+
+- name: selinux permissive
+  selinux: policy=targeted state=permissive
+
+- name: firewalld stopped
+  service: name=firewalld state=stopped enabled=no
+
+- name: deploy /root/.my.cnf
+  template: src=root.my.cnf.j2 dest=/root/.my.cnf owner=root group=root mode=0600
+
+- name: set the mysql root password
+  mysql_user: name=root password={{ mysql_root_password }}
+
+- name: deploy ICINGA-release.repo
+  copy: src=ICINGA-release.repo dest=/etc/yum.repos.d/ICINGA-release.repo
+
+- name: import ICINGA GPG KEY
+  rpm_key: key=http://packages.icinga.org/icinga.key state=present
+
+- name: install icinga2
+  yum: name=icinga2 state=present
+
+- name: start and enable icinga2
+  service: name=icinga2 state=started enabled=yes
+
+- name: install mariadb and mariadb-server
+  yum: name={{ item }} state=present
+  with_items:
+    - mariadb
+    - mariadb-server
+
+- name: start and enable mariadb
+  service: name=mariadb state=started enabled=yes
+
+- name: install icinga2-ido-mysql
+  yum: name=icinga2-ido-mysql state=present
+
+- name: deploy /etc/icinga2/features-available/ido-mysql.conf
+  template: src=ido-mysql.conf.j2 dest=/etc/icinga2/features-available/ido-mysql.conf owner=icinga group=icinga mode=0640
+  notify: restart-icinga2
+
+- name: install MySQL-python
+  yum: name=MySQL-python state=present
+
+- name: create icinga database
+  mysql_db: name=icinga state=present
+
+- name: crudely check if icinga database schema imported
+  stat: path=/var/lib/mysql/icinga/icinga_acknowledgements.frm
+  register: icinga_schema
+
+- name: import icinga database schema
+  mysql_db: state=import name=icinga target=/usr/share/icinga2-ido-mysql/schema/mysql.sql
+  when: not icinga_schema.stat.exists
+
+- name: check if ido-mysql feature enabled
+  stat: path=/etc/icinga2/features-enabled/ido-mysql.conf
+  register: ido_mysql_enabled
+  changed_when: false
+
+- name: icinga2 feature enable ido-mysql
+  shell: icinga2 feature enable ido-mysql
+  notify: restart-icinga2
+  when: not ido_mysql_enabled.stat.exists
+
+- name: install httpd
+  yum: name=httpd state=present
+
+- name: start and enable httpd
+  service: name=httpd state=started enabled=yes
+
+- name: check if ido-mysql feature enabled
+  stat: path=/etc/icinga2/features-enabled/command.conf
+  register: command_enabled
+  changed_when: false
+
+- name: icinga2 feature enable command
+  shell: icinga2 feature enable command
+  notify: restart-icinga2
+  when: not command_enabled.stat.exists
+
+- name: usermod -a -G icingacmd apache
+  user: name=apache groups=icingacmd append=yes
+
+- name: install php
+  yum: name=php state=present
+  notify: restart-httpd
+
+- name: install icingaweb2
+  yum: name=icingaweb2 state=present
+
+- name: install icingacli
+  yum: name=icingacli state=present
+
+- name: fixup php.ini (date.timezone)
+  replace: dest=/etc/php.ini regexp='^;date.timezone =$' replace="date.timezone = {{ php_timezone }}" backup=yes
+  notify: restart-httpd
+
+- name: create icingaweb2 group
+  group: name=icingaweb2 state=present
+
+- name: usermod -a -G icingaweb2 apache
+  user: name=apache groups=icingaweb2 append=yes
+
+- name: install php-ldap
+  yum: name=php-ldap state=present
+  notify: restart-httpd
+
+- name: create icingaweb2 database
+  mysql_db: name=icingaweb2 state=present
+
+- name: crudely check if icingaweb2 database schema imported
+  stat: path=/var/lib/mysql/icingaweb2/icingaweb_group.frm
+  register: icingaweb2_schema
+
+- name: import icingaweb2 database schema
+  mysql_db: state=import name=icingaweb2 target=/usr/share/doc/icingaweb2/schema/mysql.schema.sql
+  when: not icingaweb2_schema.stat.exists
+
+- name: install nagios-plugins-all
+  yum: name=nagios-plugins-all state=present

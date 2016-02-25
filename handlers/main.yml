@@ -1,0 +1,8 @@
+---
+# handlers file for ansible-icinga2-server
+
+- name: restart-icinga2
+  service: name=icinga2 state=restarted
+
+- name: restart-httpd
+  service: name=httpd state=restarted

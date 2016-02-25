@@ -1,0 +1,13 @@
+/**
+ * The db_ido_mysql library implements IDO functionality
+ * for MySQL.
+ */
+
+library "db_ido_mysql"
+
+object IdoMysqlConnection "ido-mysql" {
+  user = "root"
+  password = "{{ mysql_root_password }}"
+  host = "localhost"
+  database = "icinga"
+}
