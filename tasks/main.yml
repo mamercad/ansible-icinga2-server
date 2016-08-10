@@ -4,14 +4,18 @@
 - name: selinux permissive
   selinux: policy=targeted state=permissive
 
-- name: firewalld stopped
+- name: Check if Service Exists
+  stat: path=/etc/init.d/firewalld
+  register: service_status
+
+- name: Stop Service
   service: name=firewalld state=stopped enabled=no
+  when: service_status.stat.exists
+  register: service_stopped
 
 - name: deploy /root/.my.cnf
   template: src=root.my.cnf.j2 dest=/root/.my.cnf owner=root group=root mode=0600
 
-- name: set the mysql root password
-  mysql_user: name=root password={{ mysql_root_password }}
 
 - name: deploy ICINGA-release.repo
   copy: src=ICINGA-release.repo dest=/etc/yum.repos.d/ICINGA-release.repo
@@ -21,6 +25,9 @@
 
 - name: install icinga2
   yum: name=icinga2 state=present
+
+- name: install EPEL repo
+  yum: name=epel-release.noarch state=present
 
 - name: start and enable icinga2
   service: name=icinga2 state=started enabled=yes
@@ -43,6 +50,9 @@
 
 - name: install MySQL-python
   yum: name=MySQL-python state=present
+
+- name: set the mysql root password
+  mysql_user: check_implicit_admin=yes  name=root password={{ mysql_root_password }}
 
 - name: create icinga database
   mysql_db: name=icinga state=present
@@ -121,3 +131,6 @@
 
 - name: install nagios-plugins-all
   yum: name=nagios-plugins-all state=present
+
+- name: start icinga2
+  service: name=icinga2 state=restarted
