@@ -7,6 +7,7 @@ Warnings
 --------
 
 The role puts SELinux into permissive mode and disabled firewalld
+IcingaWeb Director Installtion is Alpha
 
 Requirements
 ------------
@@ -31,6 +32,11 @@ Example Playbook
       roles:
         - mamercad.icinga2-server
 
+Usage
+_____
+
+After Installation go to /icingaweb and log with icingaadmin and standard password  icingaadmin.
+
 License
 -------
 
@@ -40,4 +46,4 @@ Author Information
 ------------------
 
 Mark Mercado <mamercad@umflint.edu>
-
+Merlin Blom 

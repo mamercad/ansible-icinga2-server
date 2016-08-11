@@ -57,6 +57,9 @@
 - name: create icinga database
   mysql_db: name=icinga state=present
 
+- name: create icingaweb2 director user
+  mysql_user: name=icinga password=icinga priv=icinga.*:ALL,GRANT
+
 - name: crudely check if icinga database schema imported
   stat: path=/var/lib/mysql/icinga/icinga_acknowledgements.frm
   register: icinga_schema
@@ -76,7 +79,15 @@
   when: not ido_mysql_enabled.stat.exists
 
 - name: install httpd
-  yum: name=httpd state=present
+  yum: name={{ item }} state=present
+  with_items:
+    - httpd
+    - php
+    - icingaweb2
+    - icingacli
+    - nagios-plugins-all
+    - git
+    - python-pip
 
 - name: start and enable httpd
   service: name=httpd state=started enabled=yes
@@ -93,16 +104,6 @@
 
 - name: usermod -a -G icingacmd apache
   user: name=apache groups=icingacmd append=yes
-
-- name: install php
-  yum: name=php state=present
-  notify: restart-httpd
-
-- name: install icingaweb2
-  yum: name=icingaweb2 state=present
-
-- name: install icingacli
-  yum: name=icingacli state=present
 
 - name: fixup php.ini (date.timezone)
   replace: dest=/etc/php.ini regexp='^;date.timezone =$' replace="date.timezone = {{ php_timezone }}" backup=yes
@@ -121,6 +122,15 @@
 - name: create icingaweb2 database
   mysql_db: name=icingaweb2 state=present
 
+- name: create icingaweb2 director database
+  mysql_db: name=director state=present
+
+- name: create icingaweb2 director user
+  mysql_user: name=director password=director priv=director.*:ALL,GRANT
+
+- name: create icingaweb2  user
+  mysql_user: name=icingaweb2 password=icingaweb2 priv=icingaweb2.*:ALL,GRANT
+
 - name: crudely check if icingaweb2 database schema imported
   stat: path=/var/lib/mysql/icingaweb2/icingaweb_group.frm
   register: icingaweb2_schema
@@ -129,8 +139,61 @@
   mysql_db: state=import name=icingaweb2 target=/usr/share/doc/icingaweb2/schema/mysql.schema.sql
   when: not icingaweb2_schema.stat.exists
 
-- name: install nagios-plugins-all
-  yum: name=nagios-plugins-all state=present
+- name: Add icingaweb admin user
+  command: >
+    mysql --user=icingaweb2 --password=icingaweb2 icingaweb2
+    --execute="INSERT INTO icingaweb_user (name, active, password_hash) VALUES ('icingaadmin', 1, '$1$gPGVfVUf$LA6B2Prrt.PzHLXrHvIjb1');"
 
-- name: start icinga2
-  service: name=icinga2 state=restarted
+
+- name: copy icingaweb2 config
+  copy: src=files/icingaweb2/{{ item }} dest=/etc/icingaweb2/
+  with_items:
+    - resources.ini
+    - config.ini
+    - authentication.ini
+    - roles.ini
+
+- name: copy icingaweb2 monitorring modul config
+  copy: src=files/icingaweb2/monitoring/{{ item }} dest=/etc/icingaweb2/modules/monitoring/ owner=apache group=icingaweb2
+  with_items:
+    - config.ini
+    - backends.ini
+    - commandtransports.ini
+
+- name: deploy icingaweb2 director
+  git: dest=/usr/share/icingaweb2/modules/director/ repo=https://github.com/Icinga/icingaweb2-module-director.git
+
+- name: copy icingaweb2 director modul config
+  copy: src=files/icingaweb2/director/{{ item }} dest=/etc/icingaweb2/modules/director/
+  with_items:
+    - config.ini
+    - kikstarter.ini
+
+- name: install requirements for expect
+  pip: name=pexpect state=present
+
+- expect:
+    command: icinga2 node wizard
+    responses:
+      'Please specify if this is a satellite setup ': 'n'
+      'Please specifiy the common name': 'localhost'
+      'Bind Host': ''
+      'Bind Port': ''
+    echo: yes
+
+
+# - name: deploy icingaweb2 director shema
+#   command: icingacli director migration pending
+
+- name: restart services
+  service: name={{ item }} state=restarted
+  with_items:
+    - icinga2
+    - httpd
+
+
+- name: deploy icingaweb2 director shema
+  command: icingacli director migration run
+
+- name: deploy icingaweb2 director shema
+  command: icingacli director kickstart run
