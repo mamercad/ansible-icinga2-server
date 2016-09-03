@@ -6,13 +6,13 @@ Stands up Icinga2 on RHEL/CentOS (rough first draft)
 Warnings
 --------
 
-The role puts SELinux into permissive mode and disabled firewalld
-IcingaWeb Director Installtion is Alpha
+* The role puts SELinux into permissive mode and _enables_ firewalld
+* IcingaWeb Director Installtion is Alpha
 
 Requirements
 ------------
 
-None
+* EPEL 7 (for `python-pip` providing the `firewall` package)
 
 Role Variables
 --------------
@@ -30,12 +30,13 @@ Example Playbook
     - hosts:
         - icinga2
       roles:
+        - mamercad.epel
         - mamercad.icinga2-server
 
 Usage
 _____
 
-After Installation go to /icingaweb and log with icingaadmin and standard password  icingaadmin.
+After installation, visit `/icingaweb` and log with `icingaadmin` and standard password `icingaadmin`. The password (via hash), can be changed in `vars/main.yml`.
 
 License
 -------
@@ -46,4 +47,4 @@ Author Information
 ------------------
 
 Mark Mercado <mamercad@umflint.edu>
-Merlin Blom 
+Merlin Blom

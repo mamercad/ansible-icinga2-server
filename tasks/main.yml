@@ -4,18 +4,20 @@
 - name: selinux permissive
   selinux: policy=targeted state=permissive
 
-- name: Check if Service Exists
-  stat: path=/etc/init.d/firewalld
-  register: service_status
+- name: enable firewalld
+  service: name=firewalld state=started enabled=yes
 
-- name: Stop Service
-  service: name=firewalld state=stopped enabled=no
-  when: service_status.stat.exists
-  register: service_stopped
+- name: install python-pip (for firewall)
+  yum: name=python-pip state=present
+
+- name: pip install firewall
+  pip: name=firewall
+
+- name: let http through firewalld
+  firewalld: service=http permanent=true immediate=yes state=enabled
 
 - name: deploy /root/.my.cnf
   template: src=root.my.cnf.j2 dest=/root/.my.cnf owner=root group=root mode=0600
-
 
 - name: deploy ICINGA-release.repo
   copy: src=ICINGA-release.repo dest=/etc/yum.repos.d/ICINGA-release.repo
@@ -142,14 +144,14 @@
 - name: check if icingaweb admin user exists
   command: >
     mysql --user=icingaweb2 --password=icingaweb2 icingaweb2
-    --execute="SELECT * FROM icingaweb_user WHERE name='icingaadmin' AND active=1 AND password_hash='$1$gPGVfVUf$LA6B2Prrt.PzHLXrHvIjb1';"
+    --execute="SELECT * FROM icingaweb_user WHERE name='icingaadmin' AND active=1 AND password_hash='{{ icingaadmin_hash }}';"
   register: check_icingaweb_admin
 
 - name: Add icingaweb admin user
   command: >
     mysql --user=icingaweb2 --password=icingaweb2 icingaweb2
-    --execute="INSERT INTO icingaweb_user (name, active, password_hash) VALUES ('icingaadmin', 1, '$1$gPGVfVUf$LA6B2Prrt.PzHLXrHvIjb1');"
-  when: '"Empty set" in check_icingaweb_admin.stdout'
+    --execute="INSERT INTO icingaweb_user (name, active, password_hash) VALUES ('icingaadmin', 1, '{{ icingaadmin_hash }}');"
+  when: check_icingaweb_admin.stdout == ''
 
 - name: copy icingaweb2 config
   copy: src=files/icingaweb2/{{ item }} dest=/etc/icingaweb2/
