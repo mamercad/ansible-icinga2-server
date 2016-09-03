@@ -139,11 +139,17 @@
   mysql_db: state=import name=icingaweb2 target=/usr/share/doc/icingaweb2/schema/mysql.schema.sql
   when: not icingaweb2_schema.stat.exists
 
+- name: check if icingaweb admin user exists
+  command: >
+    mysql --user=icingaweb2 --password=icingaweb2 icingaweb2
+    --execute="SELECT * FROM icingaweb_user WHERE name='icingaadmin' AND active=1 AND password_hash='$1$gPGVfVUf$LA6B2Prrt.PzHLXrHvIjb1';"
+  register: check_icingaweb_admin
+
 - name: Add icingaweb admin user
   command: >
     mysql --user=icingaweb2 --password=icingaweb2 icingaweb2
     --execute="INSERT INTO icingaweb_user (name, active, password_hash) VALUES ('icingaadmin', 1, '$1$gPGVfVUf$LA6B2Prrt.PzHLXrHvIjb1');"
-
+  when: '"Empty set" in check_icingaweb_admin.stdout'
 
 - name: copy icingaweb2 config
   copy: src=files/icingaweb2/{{ item }} dest=/etc/icingaweb2/
